@@ -1,0 +1,165 @@
+"use client"
+
+import { Button } from "@/components/ui/button"
+import { MoreHorizontal, Pencil, QrCode, Printer, Trash2 } from "lucide-react"
+import { useState, useRef, useEffect, useSyncExternalStore } from "react"
+import Link from "next/link"
+import { QRCodeSVG } from "qrcode.react"
+import { createPortal } from "react-dom"
+
+export function ProductActions({ productId, productCode, productName, hasUpdate = true, hasDelete = true }: { productId: string, productCode: string, productName: string, hasUpdate?: boolean, hasDelete?: boolean }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [showQrModal, setShowQrModal] = useState(false)
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    if (isOpen) document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [isOpen])
+
+  useEffect(() => {
+    let prevTitle = ""
+    const handleBeforePrint = () => {
+      prevTitle = document.title
+      document.title = ""
+    }
+    const handleAfterPrint = () => {
+      if (prevTitle) {
+        document.title = prevTitle
+      }
+    }
+    window.addEventListener("beforeprint", handleBeforePrint)
+    window.addEventListener("afterprint", handleAfterPrint)
+    return () => {
+      window.removeEventListener("beforeprint", handleBeforePrint)
+      window.removeEventListener("afterprint", handleAfterPrint)
+    }
+  }, [])
+
+  const handlePrint = () => {
+    const prevTitle = document.title
+    document.title = ""
+    setTimeout(() => {
+      window.print()
+      setTimeout(() => {
+        document.title = prevTitle
+      }, 1000)
+    }, 100)
+  }
+
+  const qrModalContent = showQrModal ? (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 print:bg-transparent print:static">
+      <div className="w-full max-w-sm rounded-md bg-white p-6 shadow-sm border border-gray-200 text-black print-exact">
+        <div className="text-center mb-4">
+          <h2 className="text-lg font-black tracking-tight">{productCode}</h2>
+          <p className="text-sm text-gray-700 break-words line-clamp-3 mt-1 font-medium">{productName}</p>
+        </div>
+        
+        <div className="flex justify-center bg-white p-3 rounded-md border-2 border-dashed border-gray-300">
+          <QRCodeSVG 
+            value={productCode} 
+            size={180}
+            bgColor={"#ffffff"}
+            fgColor={"#000000"}
+            level={"M"}
+          />
+        </div>
+        
+        <div className="mt-8 flex flex-col gap-2 print-hidden">
+          <div className="flex justify-between gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowQrModal(false)}
+              className="rounded-md flex-1 text-black border-gray-300 hover:bg-gray-100"
+            >
+              Fechar
+            </Button>
+            <Button 
+              onClick={handlePrint}
+              className="rounded-md flex-1 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm flex items-center justify-center gap-2"
+            >
+              <Printer className="h-4 w-4" />
+              Imprimir Rápido
+            </Button>
+          </div>
+          <Link href={`/products/print-labels?ids=${productId}`} className="w-full">
+            <Button 
+              type="button"
+              variant="secondary"
+              className="w-full text-xs text-slate-700 hover:text-slate-900 border border-slate-200"
+            >
+              Mais Formatos & Cópias (Adesivo, Gôndola, Tag) &rarr;
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </div>
+  ) : null
+
+  return (
+    <div className="relative flex justify-end" ref={dropdownRef}>
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        onClick={() => setIsOpen(!isOpen)}
+        className="h-8 w-8 text-muted-foreground hover:bg-muted"
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </Button>
+
+      {isOpen && (
+        <div className="absolute right-0 top-10 z-50 w-44 rounded-md border border-border bg-card  p-1.5 shadow-sm    ">
+          {hasUpdate && (
+            <Link href={`/products/${productId}/edit`}>
+              <button className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-muted ">
+                <Pencil className="h-4 w-4 text-muted-foreground" />
+                Editar
+              </button>
+            </Link>
+          )}
+          <button 
+            onClick={() => {
+              setIsOpen(false)
+              setShowQrModal(true)
+            }}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-muted  mt-1"
+          >
+            <QrCode className="h-4 w-4 text-primary" />
+            Visualizar QR Code
+          </button>
+          <Link href={`/products/print-labels?ids=${productId}`}>
+            <button className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-muted mt-1">
+              <Printer className="h-4 w-4 text-primary" />
+              Imprimir Etiqueta
+            </button>
+          </Link>
+          {hasDelete && (
+            <button 
+              onClick={async () => {
+                if (window.confirm('Tem certeza que deseja excluir este produto?')) {
+                  const { deleteProduct } = await import('./actions')
+                  await deleteProduct(productId)
+                  window.location.reload()
+                }
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50  mt-1"
+            >
+              <Trash2 className="h-4 w-4 text-red-600" />
+              Excluir
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* MODAL DO QR CODE (Renderizado no Portal) */}
+      {mounted && showQrModal && createPortal(qrModalContent, document.body)}
+    </div>
+  )
+}

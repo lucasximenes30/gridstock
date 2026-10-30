@@ -1,0 +1,19 @@
+import { db } from "@/lib/db"
+import { requireAnyPermissionPage } from "@/lib/permissions"
+import { EmployeeImportClient } from "./import-client"
+
+export const metadata = {
+  title: "Importar Funcionários de Campo - GridStock",
+}
+
+export default async function EmployeeImportPage() {
+  await requireAnyPermissionPage("USER_MANAGE", "CONFIG_MANAGE", "PRODUCT_CREATE", "STOCK_EXIT")
+
+  const worksites = await db.worksite.findMany({
+    where: { status: "ACTIVE" },
+    select: { id: true, name: true, code: true },
+    orderBy: { name: "asc" },
+  })
+
+  return <EmployeeImportClient worksites={worksites} />
+}
